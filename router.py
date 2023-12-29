@@ -13,10 +13,21 @@ class FlawlessAPI:
         self.routes = []  # 路由表列表
         self.middleware_stack = []  # 中间件栈列表
 
-    def add_route(self, method: list, path: str, handler: Callable):
-        if len(method) == 0:
-            method = ['GET', 'POST']
+    def add_route(self, path: str, handler: Callable, method=None):
+        if method is None:
+            method = ["POST", "GET"]
         self.routes.append((method, path, handler))  # 向路由表中添加路由
+
+    def add_routes(self, urls: list):
+        if len(urls) > 0:
+            for _url in urls:
+                route_path = _url[0]
+                handler = _url[1]
+                if len(_url) > 2:
+                    methods = _url[2]
+                else:
+                    methods = ["GET", "POST"]
+                self.routes.append((methods, route_path, handler))
 
     def add_middleware(self, middleware: Callable):
         self.middleware_stack.append(self.create_middleware(middleware))  # 向中间件栈中添加中间件
@@ -139,17 +150,9 @@ async def about_page(request: AsyncRequest):
 
 
 # 将路由和处理函数关联起来
-app.add_route([], "/hello", hello_world)
-app.add_route([], "/about", about_page)
-
-
-# 主函数，会被异步运行
-async def main():
-    config = uvicorn.Config(app=app, loop='asyncio', host="0.0.0.0", port=8000)
-    server = uvicorn.Server(config)  # 创建 uvicorn 服务器实例
-    await server.serve()  # 启动服务器
-
+app.add_route("/hello", hello_world)
+app.add_route("/about", about_page)
 
 # 当该脚本被作为程序运行时，执行 main 函数
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvicorn.run(app, host="0.0.0.0", port=8000)
