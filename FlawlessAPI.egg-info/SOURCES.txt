@@ -1,0 +1,10 @@
+README.md
+setup.py
+FlawlessAPI.egg-info/PKG-INFO
+FlawlessAPI.egg-info/SOURCES.txt
+FlawlessAPI.egg-info/dependency_links.txt
+FlawlessAPI.egg-info/requires.txt
+FlawlessAPI.egg-info/top_level.txt
+middleware/__init__.py
+middleware/cors.py
+middleware/csrf.py
