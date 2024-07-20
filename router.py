@@ -1,9 +1,5 @@
-import asyncio
-import json
-
-import optional
-import uvicorn
-from typing import Callable, List, Tuple
+from typing import Callable, List
+from response import AsyncResponse
 
 from requests import AsyncRequest
 
@@ -11,23 +7,23 @@ from requests import AsyncRequest
 class FlawlessAPI:
     def __init__(self):
         self.routes = []  # 路由表列表
+        self.routes = {}
         self.middleware_stack = []  # 中间件栈列表
+        self.async_response = AsyncResponse()
+
+    def route(self, path: str, methods: List[str] = None):
+        if methods is None:
+            methods = ["POST", "GET"]
+        def decorator(handler):
+            self.routes[path] = (methods, handler)
+            return handler
+
+        return decorator
 
     def add_route(self, path: str, handler: Callable, method=None):
         if method is None:
             method = ["POST", "GET"]
-        self.routes.append((method, path, handler))  # 向路由表中添加路由
-
-    def add_routes(self, urls: list):
-        if len(urls) > 0:
-            for _url in urls:
-                route_path = _url[0]
-                handler = _url[1]
-                if len(_url) > 2:
-                    methods = _url[2]
-                else:
-                    methods = ["GET", "POST"]
-                self.routes.append((methods, route_path, handler))
+        self.routes[path] = (method, handler)
 
     def add_middleware(self, middleware: Callable):
         self.middleware_stack.append(self.create_middleware(middleware))  # 向中间件栈中添加中间件
@@ -38,19 +34,19 @@ class FlawlessAPI:
 
     @staticmethod
     # 中间件工厂函数
-    def create_middleware(logic):
-        def middleware(scope, handler):
+    def create_middleware(middleware):
+        def exe_middleware(scope, handler):
             async def new_handler(scope, receive, send):
                 # 在请求处理前执行逻辑
-                await logic(scope, 'before')
+                await middleware(scope, 'before')
                 # 调用下一个处理函数
                 await handler(scope, receive, send)
                 # 在请求处理后执行逻辑
-                await logic(scope, 'after')
+                await middleware(scope, 'after')
 
             return new_handler
 
-        return middleware
+        return exe_middleware
 
     async def process_middlewares(self, scope, receive, send):
         handler = self.handle_request  # 最终处理请求的函数
@@ -66,93 +62,20 @@ class FlawlessAPI:
         assert scope['type'] == 'http'
         request_path = scope['path']
         request_method = scope['method']
-
+        method, handler = self.routes[request_path]
         # 寻找匹配的路由
-        for method, route_path, handler in self.routes:
-            if route_path == request_path and request_method in method:
-                request = AsyncRequest(scope, receive, send)
-                response = await handler(request)
-                print(response)
-                assert isinstance(response, dict), "Response must be a dict"
-                code = response.get('code', 200)
-                await self._send_json_response(send, code, response)
-                return
+        if request_method in method:
+            request = AsyncRequest(scope, receive, send)
+            response = await handler(request)
+            print(response)
+            assert isinstance(response, dict), "Response must be a dict"
+            code = response.get('code', 200)
+            await self.async_response.send_json_response(send, code, response)
+            return
 
         # 没有找到匹配的路由时，发送404响应
-        await self._send_not_found_response(send)
-
-    async def _send_json_response(self, send, status_code, body_dict):
-        bytes_data = json.dumps(body_dict).encode('utf-8')
-        await self._send_response(
-            send,
-            status_code,
-            bytes_data,
-            headers=[
-                [b'content-type', b'application/json'],
-            ]
-        )
-
-    async def _send_not_found_response(self, send):
-        await self._send_response(
-            send,
-            404,
-            b'Not Found',
-            headers=[
-                [b'content-type', b'text/plain'],
-            ]
-        )
-
-    @staticmethod
-    async def _send_response(send, status_code, body, headers):
-        await send({
-            'type': 'http.response.start',
-            'status': status_code,
-            'headers': headers,
-        })
-        await send({
-            'type': 'http.response.body',
-            'body': body,
-            'more_body': False  # 表示这是响应的最后一部分
-        })
+        await self.async_response.send_not_found_response(send)
 
 
 # 示例中间件函数
 # 用户定义的逻辑函数
-async def middleware_logic(scope, timing):
-    if timing == 'before':
-        print(f"Before request in {scope['path']}")
-    elif timing == 'after':
-        print(f"After request in {scope['path']}")
-
-
-app = FlawlessAPI()
-
-# 将示例中间件添加到应用中
-app.add_middleware(middleware_logic)
-
-
-# 处理函数: 返回 "Hello, World!"
-async def hello_world(request: AsyncRequest):
-    query_params = await request.query_string()
-    print(query_params)
-    if query_params:
-        return {"msg": "", "code": 200, "data": query_params}
-    body = await request.body()
-    print(body)
-    if body:
-        return {"msg": "", "code": 200, "data": body}
-    return {"msg": "", "code": 200, "data": 'Hello, World!'}
-
-
-# 处理函数: 返回 "This is the about page."
-async def about_page(request: AsyncRequest):
-    return b'This is the about page.'
-
-
-# 将路由和处理函数关联起来
-app.add_route("/hello", hello_world)
-app.add_route("/about", about_page)
-
-# 当该脚本被作为程序运行时，执行 main 函数
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)

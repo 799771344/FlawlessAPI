@@ -1,0 +1,4 @@
+setuptools~=68.2.0
+uvicorn~=0.30.3
+multipart~=0.2.5
+starlette~=0.38.0
