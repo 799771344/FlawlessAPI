@@ -77,5 +77,4 @@ class FlawlessAPI:
         await self.async_response.send_not_found_response(send)
 
 
-# 示例中间件函数
-# 用户定义的逻辑函数
+

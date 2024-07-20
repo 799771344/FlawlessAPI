@@ -19,7 +19,7 @@ class AsyncRequest(HTTPConnection):
         self._stream_consumed = False
         self._is_disconnected = False
         self._form = None
-        self._headers = self._scope['headers']
+        self.headers = self._scope['headers']
 
     async def stream(self) -> typing.AsyncGenerator[bytes, None]:
         if self._stream_consumed:
@@ -38,6 +38,7 @@ class AsyncRequest(HTTPConnection):
             if not message.get("more_body", False):
                 break
 
+
     @staticmethod
     def _parse_body(body: bytes, content_type: bytes) -> typing.Any:
         if not isinstance(body.decode(), dict):
@@ -52,7 +53,7 @@ class AsyncRequest(HTTPConnection):
         if self._stream_consumed:
             raise RuntimeError("Stream has already been consumed.")
         body_bytes = b""
-        content_type = [header[1] for header in self._headers if header[0] == b'content-type']
+        content_type = [header[1] for header in self.headers if header[0] == b'content-type']
         if len(content_type) == 0:
             return body_bytes
         async for chunk in self.stream():
@@ -60,7 +61,7 @@ class AsyncRequest(HTTPConnection):
         return self._parse_body(body_bytes, content_type[0])
 
     async def json(self):
-        content_type = [header[1] for header in self._headers if header[0] == b'content-type']
+        content_type = [header[1] for header in self.headers if header[0] == b'content-type']
         if len(content_type) == 0:
             return b""
         body_bytes = await self.body()
@@ -74,13 +75,13 @@ class AsyncRequest(HTTPConnection):
                         max_fields: typing.Union[int, float] = 1000) -> FormData:
         if self._form is not None:
             return self._form
-        content_type_header = self._headers.get('content-type')
+        content_type_header = self.headers.get('content-type')
         content_type, options = parse_options_header(content_type_header)
         if content_type == b"multipart/form-data":
-            multipart_parser = MultiPartParser(self._headers, self.stream(), max_files=max_files, max_fields=max_fields)
+            multipart_parser = MultiPartParser(self.headers, self.stream(), max_files=max_files, max_fields=max_fields)
             self._form = await multipart_parser.parse()
         elif content_type == b"application/x-www-form-urlencoded":
-            form_parser = FormParser(self._headers, self.stream())
+            form_parser = FormParser(self.headers, self.stream())
             form_data = await form_parser.parse()
             self._form = FormData(form_data, encoding=options.get('charset', 'utf-8'))
         else:

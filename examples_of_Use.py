@@ -4,6 +4,8 @@ from requests import AsyncRequest
 from router import FlawlessAPI
 
 
+# 示例中间件函数
+# 用户定义的逻辑函数
 async def middleware_logic(scope, timing):
     if timing == 'before':
         print(f"Before request in {scope['path']}")
